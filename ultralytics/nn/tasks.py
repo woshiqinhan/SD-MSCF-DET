@@ -81,7 +81,6 @@ from ultralytics.nn.modules import (
     HGStem,
     ImagePoolingAttn,
     Index,
-    MCFGatedFusion,
     # YOLO-RD modules (kept explicit only for non-fusion entries)
     LRPCHead,
     Pose,
@@ -102,9 +101,12 @@ from ultralytics.nn.modules import (
     get_activation,
 )
 
-# Import all fusion modules from the dedicated fusion package to avoid missing symbols
-# and keep tasks.py decoupled from individual fusion module names.
-from ultralytics.nn.modules.fusion import *  # noqa: F401,F403
+# Optional architectures were removed from this research release. These sentinels
+# keep legacy parser branches inert without importing their implementation files.
+FeatureFusion = FCM = FCMFeatureFusion = ConvMixFusion = ScalarGate = ChannelGate = None
+CAM = SEFN = FusionConvMSAA = MSC = SpatialDependencyPerception = None
+SpatialPriorModuleLite = CrossTransformerFusion = MultiHeadCrossAttention = None
+ConvFFN_GLU = DEA = DConv = MCFGatedFusion = C2f_BiFocus = RepNCSPELAND = None
 from ultralytics.utils import DEFAULT_CFG_DICT, DEFAULT_CFG_KEYS, LOGGER, YAML, colorstr, emojis
 from ultralytics.utils.checks import check_requirements, check_suffix, check_yaml
 from ultralytics.utils.loss import (
@@ -142,295 +144,18 @@ try:
 except Exception:
     CONTRAST_AVAILABLE = False
 
-_LSCD_IMPORT_ERROR = None
-# LSCD 检测头导入 (轻量化共享卷积检测头)
-try:
-    from ultralytics.nn.Head import (
-        Detect_LSCD,
-        Segment_LSCD,
-        Pose_LSCD,
-        OBB_LSCD,
-        Conv_GN,
-        Scale,
-    )
-    LSCD_AVAILABLE = True
-except ImportError as _err:
-    _LSCD_IMPORT_ERROR = _err
-    LSCD_AVAILABLE = False
-    LOGGER.warning(f"LSCD head import failed: {_err}")
-    def _missing_lscd(*args, **kwargs):
-        raise RuntimeError(f"LSCD head modules unavailable: {_err}")
+Detect_LSCD = Segment_LSCD = Pose_LSCD = OBB_LSCD = None
+LSCD_AVAILABLE = False
 
-    for _name in ['Detect_LSCD', 'Segment_LSCD', 'Pose_LSCD', 'OBB_LSCD', 'Conv_GN', 'Scale']:
-        globals()[_name] = _missing_lscd
+from ultralytics.nn.Neck import CSPOmniKernel, GSConvE, SNI, SPDConv
+MFM = None
 
-_SOEP_IMPORT_ERROR = None
-# SOEP 颈部模块导入 (小目标增强金字塔)
-try:
-    from ultralytics.nn.Neck import (
-        SPDConv,
-        FGM,
-        OmniKernel,
-        CSPOmniKernel,
-        SNI,
-        GSConvE,
-        MFM,
-    )
-    SOEP_AVAILABLE = True
-except ImportError as _err:
-    _SOEP_IMPORT_ERROR = _err
-    SOEP_AVAILABLE = False
-    LOGGER.warning(f"SOEP neck import failed: {_err}")
-    def _missing_soep(*args, **kwargs):
-        raise RuntimeError(f"SOEP neck modules unavailable: {_err}")
+from ultralytics.nn.modules.sd_mscf import MSCF_C3, SD_PSA
 
-    for _name in ['SPDConv', 'FGM', 'OmniKernel', 'CSPOmniKernel', 'SNI', 'GSConvE', 'MFM']:
-        globals()[_name] = _missing_soep
-
-_C3K2_IMPORT_ERROR = None
-
-# C3k2 Extraction 模块导入 (C3k2变体模块) — 精确子模块导入，避免聚合导入连带失败
-try:
-    from ultralytics.nn.extraction.c3k2_variants import (
-        # Batch 1
-        C3k2_Faster,
-        C3k2_PConv,
-        C3k2_ODConv,
-        C3k2_Faster_EMA,
-        C3k2_DBB,
-        C3k2_WDBB,
-        C3k2_DeepDBB,
-        # Batch 2
-        C3k2_CloAtt,
-        C3k2_SCConv,
-        C3k2_ScConv,
-        C3k2_EMSC,
-        C3k2_EMSCP,
-        # Batch 3
-        C3k2_ContextGuided,
-        C3k2_MSBlock,
-        C3k2_EMBC,
-        C3k2_EMA,
-        # Batch 4
-        C3k2_DLKA,
-        C3k2_DAttention,
-        C3k2_Parc,
-        C3k2_DWR,
-        C3k2_RFAConv,
-        # Batch 5
-        C3k2_RFCBAMConv,
-        C3k2_RFCAConv,
-        C3k2_FocusedLinearAttention,
-        C3k2_MLCA,
-        C3k2_AKConv,
-        # Batch 6
-        C3k2_UniRepLKNetBlock,
-        C3k2_DRB,
-        C3k2_DWR_DRB,
-        C3k2_AggregatedAtt,
-        C3k2_SWC,
-        # Batch 7
-        C3k2_iRMB,
-        C3k2_iRMB_Cascaded,
-        C3k2_iRMB_DRB,
-        C3k2_iRMB_SWC,
-        C3k2_DynamicConv,
-        # Batch 8
-        C3k2_GhostDynamicConv,
-        C3k2_RVB,
-        C3k2_RVB_SE,
-        C3k2_RVB_EMA,
-        # Batch 9
-        MSCF_C3,
-        C3k2_PPA,
-        C3k2_Faster_CGLU,
-        C3k2_Star,
-        # Batch 10
-        C3k2_Star_CAA,
-        C3k2_EIEM,
-        C3k2_DEConv,
-        # Batch 11
-        C3k2_gConv,
-        C3k2_AdditiveBlock,
-        C3k2_AdditiveBlock_CGLU,
-        # Batch 12 - 新迁移
-        C3k2_RetBlock,
-        C3k2_Heat,
-        C3k2_WTConv,
-        C3k2_FMB,
-        C3k2_MSMHSA_CGLU,
-        C3k2_MogaBlock,
-        C3k2_SHSA,
-        C3k2_SHSA_CGLU,
-        C3k2_MutilScaleEdgeInformationEnhance,
-        C3k2_MutilScaleEdgeInformationSelect,
-        C3k2_FFCM,
-        C3k2_SMAFB,
-        C3k2_SMAFB_CGLU,
-        C3k2_MSM,
-        C3k2_HDRAB,
-        C3k2_RAB,
-        C3k2_LFE,
-        C3k2_IDWC,
-        C3k2_IDWB,
-        C3k2_CAMixer,
-    )
-    C3K2_EXTRACTION_AVAILABLE = True
-except ImportError as _err:
-    _C3K2_IMPORT_ERROR = _err
-    # 为后续逻辑提供占位，避免 NameError
-    C3k2_DAttention = C3k2_Parc = C3k2_FocusedLinearAttention = None
-    C3K2_EXTRACTION_AVAILABLE = False
-    LOGGER.warning(f"C3k2 extraction modules import failed: {_err}")
-
-_C2PSA_IMPORT_ERROR = None
-# C2PSA Extraction 模块导入 (C2PSA变体模块) — 精确子模块导入
-try:
-    from ultralytics.nn.extraction.c2psa_variants import (
-        # Batch 1 - 基础类和第一批变体
-        C2PSA,
-        C2fPSA,
-        C2BRA,
-        BRABlock,
-        # Batch 2 - 注意力机制变体
-        C2CGA,
-        CGABlock,
-        C2DA,
-        DABlock,
-        C2DPB,
-        DPBlock,
-        C2Pola,
-        Polalock,
-        StatisticalPSA,
-        StatisticalPSABlock,
-        # Batch 3 - 注意力机制变体 + 归一化增强变体
-        C2ASSA,
-        ASSAlock,
-        C2MSLA,
-        MSLAlock,
-        C2PSA_DYT,
-        PSABlock_DYT,
-        SD_PSA,
-        SD_PSABlock,
-        C2Pola_DYT,
-        Polalock_DYT,
-        # Batch 4 - FFN增强变体
-        C2PSA_FMFFN,
-        PSABlock_FMFFN,
-        C2PSA_CGLU,
-        PSABlock_CGLU,
-        C2PSA_SEFN,
-        PSABlock_SEFN,
-        C2PSA_SEFFN,
-        PSABlock_SEFFN,
-        C2PSA_EDFFN,
-        PSABlock_EDFFN,
-        # Batch 5 - Mona模块化注意力归一化 + 复合增强变体
-        C2PSA_Mona,
-        PSABlock_Mona,
-        SD_PSA_Mona,
-        SD_PSABlock_Mona,
-        SD_PSA_Mona_SEFN,
-        SD_PSABlock_Mona_SEFN,
-        SD_PSA_Mona_SEFFN,
-        SD_PSABlock_Mona_SEFFN,
-        SD_PSA_Mona_EDFFN,
-        SD_PSABlock_Mona_EDFFN,
-    )
-    C2PSA_EXTRACTION_AVAILABLE = True
-except ImportError as _err:
-    _C2PSA_IMPORT_ERROR = _err
-    C2PSA_EXTRACTION_AVAILABLE = False
-    LOGGER.warning(f"C2PSA extraction modules import failed: {_err}")
-    # 占位符，确保后续引用时抛出明确错误而非 NameError
-    def _missing_c2psa(*args, **kwargs):
-        raise RuntimeError(f"C2PSA extraction modules unavailable: {_err}")
-
-    for _name in [
-        'C2PSA', 'C2fPSA', 'C2BRA', 'BRABlock', 'C2CGA', 'CGABlock', 'C2DA', 'DABlock', 'C2DPB', 'DPBlock',
-        'C2Pola', 'Polalock', 'StatisticalPSA', 'StatisticalPSABlock', 'C2ASSA', 'ASSAlock', 'C2MSLA', 'MSLAlock', 'C2PSA_DYT',
-        'PSABlock_DYT', 'SD_PSA', 'SD_PSABlock', 'C2Pola_DYT', 'Polalock_DYT', 'C2PSA_FMFFN', 'PSABlock_FMFFN',
-        'C2PSA_CGLU', 'PSABlock_CGLU', 'C2PSA_SEFN', 'PSABlock_SEFN', 'C2PSA_SEFFN', 'PSABlock_SEFFN', 'C2PSA_EDFFN',
-        'PSABlock_EDFFN', 'C2PSA_Mona', 'PSABlock_Mona', 'SD_PSA_Mona', 'SD_PSABlock_Mona', 'SD_PSA_Mona_SEFN',
-        'SD_PSABlock_Mona_SEFN', 'SD_PSA_Mona_SEFFN', 'SD_PSABlock_Mona_SEFFN', 'SD_PSA_Mona_EDFFN', 'SD_PSABlock_Mona_EDFFN',
-    ]:
-        globals()[_name] = _missing_c2psa
-
-_SPPF_IMPORT_ERROR = None
-# SPPF Extraction 模块导入（SPPF 及空间池化/融合变体） — 精确子模块导入
-try:
-    from ultralytics.nn.extraction.sppf_base import (
-        # Batch 1 - 标准 SPPF 变体
-        SPPF_LSKA,
-        # Batch 2 - GOLD-YOLO 聚合/融合
-        PyramidPoolAgg,
-        PyramidPoolAgg_PCE,
-        SimFusion_3in,
-        SimFusion_4in,
-        AdvPoolFusion,
-        # Batch 3 - 注入/小波模块
-        IFM,
-        InjectionMultiSum_Auto_pool,
-        WaveletPool,
-        WaveletUnPool,
-    )
-    SPPF_EXTRACTION_AVAILABLE = True
-except ImportError as _err:
-    _SPPF_IMPORT_ERROR = _err
-    SPPF_EXTRACTION_AVAILABLE = False
-    LOGGER.warning(f"SPPF extraction modules import failed: {_err}")
-    def _missing_sppf(*args, **kwargs):
-        raise RuntimeError(f"SPPF extraction modules unavailable: {_err}")
-
-    for _name in ['SPPF_LSKA', 'PyramidPoolAgg', 'PyramidPoolAgg_PCE', 'SimFusion_3in', 'SimFusion_4in', 'AdvPoolFusion', 'IFM', 'InjectionMultiSum_Auto_pool', 'WaveletPool', 'WaveletUnPool']:
-        globals()[_name] = _missing_sppf
-
-_NECK_IMPORT_ERROR = None
-# Neck 模块导入（AFPN/HSFPN/CFPT/BiPAN 等） — 精确子模块导入
-try:
-    from ultralytics.nn.Neck import (
-        AFPN_P345,
-        AFPN_P345_Custom,
-        AFPN_P2345,
-        AFPN_P2345_Custom,
-        HFP,
-        SDP,
-        SDP_Improved,
-        ChannelAttention_HSFPN,
-        ELA_HSFPN,
-        CA_HSFPN,
-        CAA_HSFPN,
-        CrossLayerSpatialAttention,
-        CrossLayerChannelAttention,
-        FreqFusion,
-        LocalSimGuidedSampler,
-        Fusion,
-        SDI,
-        CSPStage,
-        BiFusion,
-        OREPANCSPELAN4,
-        SBA,
-        EUCB,
-        MSDC,
-        MSCB,
-        CSP_MSCB,
-    )
-    NECK_EXTRACTION_AVAILABLE = True
-except ImportError as _err:
-    _NECK_IMPORT_ERROR = _err
-    NECK_EXTRACTION_AVAILABLE = False
-    LOGGER.warning(f"Neck modules import failed: {_err}")
-    def _missing_neck(*args, **kwargs):
-        raise RuntimeError(f"Neck modules unavailable: {_err}")
-
-    for _name in [
-        'AFPN_P345', 'AFPN_P345_Custom', 'AFPN_P2345', 'AFPN_P2345_Custom', 'HFP', 'SDP', 'SDP_Improved',
-        'ChannelAttention_HSFPN', 'ELA_HSFPN', 'CA_HSFPN', 'CAA_HSFPN', 'CrossLayerSpatialAttention',
-        'CrossLayerChannelAttention', 'FreqFusion', 'LocalSimGuidedSampler', 'Fusion', 'SDI', 'CSPStage', 'BiFusion',
-        'OREPANCSPELAN4', 'SBA', 'EUCB', 'MSCB', 'CSP_MSCB',
-    ]:
-        globals()[_name] = _missing_neck
-
+C3K2_EXTRACTION_AVAILABLE = False
+C2PSA_EXTRACTION_AVAILABLE = False
+SPPF_EXTRACTION_AVAILABLE = False
+NECK_EXTRACTION_AVAILABLE = False
 # ===== Head Class Sets (align with upstream behavior) =====
 # 统一以集合方式识别检测/分割/姿态/旋转头，便于在 parse_model/_apply/stride 推断等位置一致处理。
 DETECT_CLASS: tuple = (
@@ -455,97 +180,11 @@ if LSCD_AVAILABLE:
     POSE_CLASS = POSE_CLASS + (Pose_LSCD,)
     OBB_CLASS = OBB_CLASS + (OBB_LSCD,)
 
-# ===== Neck Module Class Sets =====
+# Module sets required by SD-MSCF-DET.
 NECK_CLASS: tuple = ()
-if NECK_EXTRACTION_AVAILABLE:
-    NECK_CLASS = (
-        AFPN_P345,
-        AFPN_P345_Custom,
-        AFPN_P2345,
-        AFPN_P2345_Custom,
-        HFP,
-        SDP,
-        SDP_Improved,
-        ChannelAttention_HSFPN,
-        ELA_HSFPN,
-        CA_HSFPN,
-        CAA_HSFPN,
-        CrossLayerSpatialAttention,
-        CrossLayerChannelAttention,
-        FreqFusion,
-        LocalSimGuidedSampler,
-        Fusion,
-        SDI,
-        CSPStage,
-        BiFusion,
-        OREPANCSPELAN4,
-        SBA,
-        EUCB,
-        MSCB,
-        CSP_MSCB,
-    )
-
-# ===== C3k2 Module Class Sets =====
-# 统一以集合方式识别C3k2及其变体，便于在 parse_model/repeat_modules 等位置一致处理。
-C3K2_CLASS: tuple = (C3k2,)
-
-# 动态扩展 C3k2 Extraction 系列模块
-if C3K2_EXTRACTION_AVAILABLE:
-    C3K2_CLASS = C3K2_CLASS + (
-        # Batch 1
-        C3k2_Faster, C3k2_PConv, C3k2_ODConv, C3k2_Faster_EMA,
-        C3k2_DBB, C3k2_WDBB, C3k2_DeepDBB,
-        # Batch 2
-        C3k2_CloAtt, C3k2_SCConv, C3k2_ScConv,
-        C3k2_EMSC, C3k2_EMSCP,
-        # Batch 3
-        C3k2_ContextGuided, C3k2_MSBlock, C3k2_EMBC, C3k2_EMA,
-        # Batch 4
-        C3k2_DLKA, C3k2_DAttention, C3k2_Parc, C3k2_DWR, C3k2_RFAConv,
-        # Batch 5
-        C3k2_RFCBAMConv, C3k2_RFCAConv,
-        C3k2_FocusedLinearAttention, C3k2_MLCA, C3k2_AKConv,
-        # Batch 6
-        C3k2_UniRepLKNetBlock, C3k2_DRB, C3k2_DWR_DRB,
-        C3k2_AggregatedAtt, C3k2_SWC,
-        # Batch 7
-        C3k2_iRMB, C3k2_iRMB_Cascaded, C3k2_iRMB_DRB,
-        C3k2_iRMB_SWC, C3k2_DynamicConv,
-        # Batch 8
-        C3k2_GhostDynamicConv, C3k2_RVB, C3k2_RVB_SE, C3k2_RVB_EMA,
-        # Batch 9
-        MSCF_C3, C3k2_PPA, C3k2_Faster_CGLU, C3k2_Star,
-        # Batch 10
-        C3k2_Star_CAA, C3k2_EIEM, C3k2_DEConv,
-        # Batch 11
-        C3k2_gConv, C3k2_AdditiveBlock, C3k2_AdditiveBlock_CGLU,
-        # Batch 12
-        C3k2_RetBlock, C3k2_Heat, C3k2_WTConv, C3k2_FMB,
-        C3k2_MSMHSA_CGLU, C3k2_MogaBlock, C3k2_SHSA, C3k2_SHSA_CGLU,
-        C3k2_MutilScaleEdgeInformationEnhance, C3k2_MutilScaleEdgeInformationSelect, C3k2_FFCM,
-        C3k2_SMAFB, C3k2_SMAFB_CGLU,
-        C3k2_MSM, C3k2_HDRAB, C3k2_RAB, C3k2_LFE,
-    )
-
-# ===== SPPF Variant Class Set =====
+C3K2_CLASS: tuple = (C3k2, MSCF_C3)
 SPPF_CLASS: tuple = (SPPF,)
-if SPPF_EXTRACTION_AVAILABLE:
-    SPPF_CLASS = SPPF_CLASS + (SPPF_LSKA,)
-
-# ===== C2PSA Module Class Sets =====
-# 统一以集合方式识别 C2PSA 及其变体，便于在 parse_model/repeat_modules 等位置一致处理。
-C2PSA_CLASS: tuple = ()
-if C2PSA_EXTRACTION_AVAILABLE:
-    C2PSA_CLASS = (C2PSA, C2fPSA) + (
-        # Batch 1/2/3 - 注意力主干变体
-        C2BRA, C2CGA, C2DA, C2DPB, C2Pola, StatisticalPSA, C2ASSA, C2MSLA,
-        C2PSA_DYT, SD_PSA, C2Pola_DYT,
-        # Batch 4 - FFN 增强
-        C2PSA_FMFFN, C2PSA_CGLU, C2PSA_SEFN, C2PSA_SEFFN, C2PSA_EDFFN,
-        # Batch 5 - Mona 复合增强
-        C2PSA_Mona, SD_PSA_Mona, SD_PSA_Mona_SEFN, SD_PSA_Mona_SEFFN, SD_PSA_Mona_EDFFN,
-    )
-
+C2PSA_CLASS: tuple = (C2PSA, SD_PSA)
 
 class BaseModel(torch.nn.Module):
     """
@@ -2377,87 +2016,12 @@ def parse_model(d, ch, verbose=True, dataset_config=None):
 
     # 针对 C3k2 变体的参数归一化，补齐缺失的关键形参以匹配上游实现
     def _normalize_c3k2_args(module, raw_args):
-        # 保留原列表，避免外部引用被直接修改
         args = list(raw_args)
-        c2_val = args[0] if args else None
-
-        # 如果 C3k2 变体未成功导入，则抛出明确错误，避免静默降级
-        if not C3K2_EXTRACTION_AVAILABLE:
-            raise RuntimeError(
-                "C3k2 extraction modules导入失败，无法解析C3k2层参数。原始异常: "
-                f"{_C3K2_IMPORT_ERROR}"
-            )
-
-        # fmapsize 相关
-        if module in (C3k2_DAttention, C3k2_Parc, C3k2_FocusedLinearAttention):
-            if len(args) < 2 or isinstance(args[1], bool):
-                args = [c2_val, (20, 20)] + args[2:]
-            # 确保第三参为 shortcut
-            if len(args) < 3 or not isinstance(args[2], bool):
-                args = args[:2] + [True] + args[3:]
-
-        # 聚合注意力：input_resolution & sr_ratio
-        elif module is C3k2_AggregatedAtt:
-            need_fill = len(args) < 3 or isinstance(args[1], bool) or isinstance(args[2], bool)
-            if need_fill:
-                # 按通道规模推导默认输入分辨率与步幅比
-                input_res = 40 if c2_val is not None and c2_val <= 512 else 20
-                sr_ratio = 2 if c2_val is not None and c2_val <= 512 else 1
-                shortcut = True
-                if len(args) > 1 and isinstance(args[1], bool):
-                    shortcut = args[1]
-                args = [c2_val, input_res, sr_ratio, shortcut]
-
-        # SWC 位移卷积：kernel_size
-        elif module is C3k2_SWC:
-            if len(args) < 2 or isinstance(args[1], bool):
-                ks = 11 if c2_val is not None and c2_val <= 256 else (9 if c2_val is not None and c2_val <= 512 else 7)
-                shortcut = True
-                # 若第二/第三参数本就是布尔，视作 shortcut
-                if len(args) > 1 and isinstance(args[1], bool):
-                    shortcut = args[1]
-                elif len(args) > 2 and isinstance(args[2], bool):
-                    shortcut = args[2]
-                args = [c2_val, ks, shortcut]
-
-        # UniRep 大核：k
-        elif module is C3k2_UniRepLKNetBlock:
-            if len(args) < 2 or isinstance(args[1], bool):
-                shortcut = True
-                if len(args) > 1 and isinstance(args[1], bool):
-                    shortcut = args[1]
-                args = [c2_val, 7, shortcut]
-
-        # iRMB 派生：深度卷积核
-        elif module in (C3k2_iRMB_DRB, C3k2_iRMB_SWC):
-            if len(args) < 2 or isinstance(args[1], bool):
-                ks = 13 if c2_val is not None and c2_val <= 256 else (11 if c2_val is not None and c2_val <= 512 else 9)
-                shortcut = True
-                if len(args) > 1 and isinstance(args[1], bool):
-                    shortcut = args[1]
-                elif len(args) > 2 and isinstance(args[2], bool):
-                    shortcut = args[2]
-                args = [c2_val, ks, shortcut]
-
-        # MSCF_Block 复合参数
-        elif module is MSCF_C3:
-            need_fill = len(args) < 6 or isinstance(args[1], bool)
-            if need_fill or not hasattr(args[1], "__iter__"):
-                shortcut = True
-                if len(args) > 1 and isinstance(args[1], bool):
-                    shortcut = args[1]
-                args = [
-                    c2_val,
-                    (3, 5, 7, 9, 11),  # kernel_sizes
-                    1.0,               # expansion
-                    True,              # with_caa
-                    11,                # caa_kernel_size
-                    True,              # add_identity
-                    shortcut,
-                ]
-
+        if module is MSCF_C3:
+            c2 = args[0]
+            c3k = args[1] if len(args) > 1 and isinstance(args[1], bool) else True
+            args = [c2, (3, 5, 7, 9, 11), 1.0, True, 11, True, c3k]
         return args
-
     for i, layer_config in enumerate(d["backbone"] + d["head"]):  # from, number, module, args, [input_type, hook]
         # ===== MULTIMODAL EXTENSION START - 层配置解析 =====
         # Parse layer configuration with optional 5th field for multimodal routing

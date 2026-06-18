@@ -59,8 +59,9 @@ python train.py --device 0 --imgsz 640 --amp
 - `configs/SD-MSCF-DET.yaml`: 论文主模型结构配置。
 - `configs/data.yaml`: 双模态数据集模板。
 - `train.py`: 最小训练入口。
+- `ultralytics/nn/modules/sd_mscf.py`: MSCF-C3 与 SD-PSA 的完整实现。
 - `ultralytics/nn/Neck/`: SOEP 与 RFPN 相关模块。
-- `ultralytics/`: 支持 YOLOMM 双模态训练所需的精简定制框架代码。
+- `ultralytics/`: 仅保留 YOLOMM 双模态检测训练所需的框架代码。
 
 ## License
 
