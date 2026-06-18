@@ -4496,9 +4496,9 @@ class C3k_RVB_EMA(C3k):
         self.m = nn.Sequential(*(RepViTBlock_EMA(c_, c_) for _ in range(n)))
 
 
-# ===================== Batch 9: PKIModule, PPA, Faster_CGLU, Star =====================
+# ===================== Batch 9: MSCF_Block, PPA, Faster_CGLU, Star =====================
 
-class PKIModule_CAA(nn.Module):
+class MSCF_CAA(nn.Module):
     """Poly Kernel Inception模块的上下文聚合注意力
 
     源代码位置: block.py:5130-5143
@@ -4518,7 +4518,7 @@ class PKIModule_CAA(nn.Module):
         return attn_factor
 
 
-class PKIModule(nn.Module):
+class MSCF_Block(nn.Module):
     """Poly Kernel Inception模块
 
     源代码位置: block.py:5145-5179
@@ -4533,7 +4533,7 @@ class PKIModule(nn.Module):
         self.post_conv = Conv(hidc, ouc)
 
         if with_caa:
-            self.caa_factor = PKIModule_CAA(hidc, caa_kernel_size, caa_kernel_size)
+            self.caa_factor = MSCF_CAA(hidc, caa_kernel_size, caa_kernel_size)
         else:
             self.caa_factor = None
 
@@ -4559,15 +4559,15 @@ class PKIModule(nn.Module):
         return x
 
 
-class C3k_PKIModule(C3k):
-    """使用PKIModule的C3k模块
+class C3k_MSCF(C3k):
+    """使用MSCF_Block的C3k模块
 
     源代码位置: block.py:5181-5185
     """
     def __init__(self, c1, c2, n=1, kernel_sizes=(3, 5, 7, 9, 11), expansion=1.0, with_caa=True, caa_kernel_size=11, add_identity=True, g=1, e=0.5, k=3):
         super().__init__(c1, c2, n, True, g, e, k)
         c_ = int(c2 * e)  # hidden channels
-        self.m = nn.Sequential(*(PKIModule(c_, c_, kernel_sizes, expansion, with_caa, caa_kernel_size, add_identity) for _ in range(n)))
+        self.m = nn.Sequential(*(MSCF_Block(c_, c_, kernel_sizes, expansion, with_caa, caa_kernel_size, add_identity) for _ in range(n)))
 
 
 # PPA相关类（从hcfnet.py迁移）

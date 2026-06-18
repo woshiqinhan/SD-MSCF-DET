@@ -125,7 +125,7 @@ try:
         C2DA,
         C2DPB,
         C2Pola,
-        C2TSSA,
+        StatisticalPSA,
         C2ASSA,
         C2MSLA,
         C2PSA_DYT,
@@ -145,7 +145,7 @@ try:
         SD_PSA_Mona_EDFFN,
     )
     __all__ += [
-        'C2PSA','C2fPSA','C2BRA','C2CGA','C2DA','C2DPB','C2Pola','C2TSSA',
+        'C2PSA','C2fPSA','C2BRA','C2CGA','C2DA','C2DPB','C2Pola','StatisticalPSA',
         'C2ASSA','C2MSLA','C2PSA_DYT','SD_PSA','C2Pola_DYT',
         'C2PSA_FMFFN','C2PSA_CGLU','C2PSA_SEFN','C2PSA_SEFFN','C2PSA_EDFFN',
         'C2PSA_Mona','SD_PSA_Mona','SD_PSA_Mona_SEFN','SD_PSA_Mona_SEFFN','SD_PSA_Mona_EDFFN',

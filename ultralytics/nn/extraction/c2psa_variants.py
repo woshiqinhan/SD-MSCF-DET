@@ -20,7 +20,7 @@ from .c2psa_base import (
     DAttention,
     DPB_Attention,
     PolaLinearAttention,
-    AttentionTSSA,
+    StatisticalAttention,
     # Batch 3 additions
     DynamicTanh,
     AdaptiveSparseSA,
@@ -50,8 +50,8 @@ __all__ = [
     'DPBlock',
     'C2Pola',
     'Polalock',
-    'C2TSSA',
-    'TSSAlock',
+    'StatisticalPSA',
+    'StatisticalPSABlock',
     # Batch 3 - 注意力机制变体 + 归一化增强变体
     'C2ASSA',
     'ASSAlock',
@@ -60,7 +60,7 @@ __all__ = [
     'C2PSA_DYT',
     'PSABlock_DYT',
     'SD_PSA',
-    'TSSAlock_DYT',
+    'SD_PSABlock',
     'C2Pola_DYT',
     'Polalock_DYT',
     # Batch 4 - FFN增强变体
@@ -78,13 +78,13 @@ __all__ = [
     'C2PSA_Mona',
     'PSABlock_Mona',
     'SD_PSA_Mona',
-    'TSSAlock_DYT_Mona',
+    'SD_PSABlock_Mona',
     'SD_PSA_Mona_SEFN',
-    'TSSAlock_DYT_Mona_SEFN',
+    'SD_PSABlock_Mona_SEFN',
     'SD_PSA_Mona_SEFFN',
-    'TSSAlock_DYT_Mona_SEFFN',
+    'SD_PSABlock_Mona_SEFFN',
     'SD_PSA_Mona_EDFFN',
-    'TSSAlock_DYT_Mona_EDFFN',
+    'SD_PSABlock_Mona_EDFFN',
 ]
 
 
@@ -319,39 +319,39 @@ class C2Pola(C2PSA):
         return self.cv2(torch.cat((a, b), 1))
 
 
-class TSSAlock(PSABlock):
+class StatisticalPSABlock(PSABlock):
     """
     Token Statistics Self-Attention Block (ToST ICLR2025)
     Token统计自注意力块
     """
     def __init__(self, c, attn_ratio=0.5, num_heads=4, shortcut=True) -> None:
         super().__init__(c, attn_ratio, num_heads, shortcut)
-        self.attn = AttentionTSSA(c, num_heads=num_heads)
+        self.attn = StatisticalAttention(c, num_heads=num_heads)
 
     def forward(self, x):
-        """Executes a forward pass through TSSAlock, applying token statistics attention."""
+        """Executes a forward pass through StatisticalPSABlock, applying token statistics attention."""
         BS, C, H, W = x.size()
         x = x + self.attn(x.flatten(2).permute(0, 2, 1)).permute(0, 2, 1).view([-1, C, H, W]).contiguous() if self.add else self.attn(x.flatten(2).permute(0, 2, 1)).permute(0, 2, 1).view([-1, C, H, W]).contiguous()
         x = x + self.ffn(x) if self.add else self.ffn(x)
         return x
 
 
-class C2TSSA(C2PSA):
+class StatisticalPSA(C2PSA):
     """
     C2PSA with Token Statistics Self-Attention (ToST ICLR2025)
     使用Token统计自注意力的C2PSA变体
 
     Examples:
-        >>> c2tssa = C2TSSA(c1=256, c2=256, n=3, e=0.5)
+        >>> statistical_psa = StatisticalPSA(c1=256, c2=256, n=3, e=0.5)
         >>> input_tensor = torch.randn(1, 256, 64, 64)
-        >>> output_tensor = c2tssa(input_tensor)
+        >>> output_tensor = statistical_psa(input_tensor)
     """
     def __init__(self, c1, c2, n=1, e=0.5):
         super().__init__(c1, c2, n, e)
-        self.m = nn.Sequential(*(TSSAlock(self.c, attn_ratio=0.5, num_heads=self.c // 64) for _ in range(n)))
+        self.m = nn.Sequential(*(StatisticalPSABlock(self.c, attn_ratio=0.5, num_heads=self.c // 64) for _ in range(n)))
 
     def forward(self, x):
-        """Processes the input tensor 'x' through a series of TSSA blocks and returns the transformed tensor."""
+        """Processes the input tensor 'x' through a series of statistical attention blocks and returns the transformed tensor."""
         a, b = self.cv1(x).split((self.c, self.c), dim=1)
         BS, C, H, W = b.size()
         b = self.m(b)
@@ -494,10 +494,10 @@ class C2PSA_DYT(C2PSA):
         self.m = nn.Sequential(*(PSABlock_DYT(self.c, attn_ratio=0.5, num_heads=self.c // 64) for _ in range(n)))
 
 
-class TSSAlock_DYT(PSABlock):
+class SD_PSABlock(PSABlock):
     """
     PSABlock with Token Statistics Self-Attention and Dynamic Tanh
-    结合TSSA和DynamicTanh的PSA块
+    结合statistical attention和DynamicTanh的PSA块
 
     特点:
     - Token统计自注意力 (ICLR2025 ToST)
@@ -509,10 +509,10 @@ class TSSAlock_DYT(PSABlock):
 
         self.dyt1 = DynamicTanh(normalized_shape=c, channels_last=False)
         self.dyt2 = DynamicTanh(normalized_shape=c, channels_last=False)
-        self.attn = AttentionTSSA(c, num_heads=num_heads)
+        self.attn = StatisticalAttention(c, num_heads=num_heads)
 
     def forward(self, x):
-        """Executes a forward pass through PSABlock, applying TSSA with DYT normalization."""
+        """Executes a forward pass through PSABlock, applying statistical attention with DYT normalization."""
         BS, C, H, W = x.size()
         x = x + self.attn(self.dyt1(x).flatten(2).permute(0, 2, 1)).permute(0, 2, 1).view([-1, C, H, W]).contiguous() if self.add else self.attn(self.dyt1(x).flatten(2).permute(0, 2, 1)).permute(0, 2, 1).view([-1, C, H, W]).contiguous()
         x = x + self.ffn(self.dyt2(x)) if self.add else self.ffn(self.dyt2(x))
@@ -522,7 +522,7 @@ class TSSAlock_DYT(PSABlock):
 class SD_PSA(C2PSA):
     """
     SD-PSA with Token Statistics Self-Attention and Dynamic Tanh
-    结合TSSA和DynamicTanh的C2PSA变体
+    结合statistical attention和DynamicTanh的C2PSA变体
 
     来源:
     - ICLR2025 ToST (Token Statistics Transformer)
@@ -540,7 +540,7 @@ class SD_PSA(C2PSA):
     """
     def __init__(self, c1, c2, n=1, e=0.5):
         super().__init__(c1, c2, n, e)
-        self.m = nn.Sequential(*(TSSAlock_DYT(self.c, attn_ratio=0.5, num_heads=self.c // 64) for _ in range(n)))
+        self.m = nn.Sequential(*(SD_PSABlock(self.c, attn_ratio=0.5, num_heads=self.c // 64) for _ in range(n)))
 
 
 class Polalock_DYT(PSABlock):
@@ -862,9 +862,9 @@ class C2PSA_Mona(C2PSA):
         self.m = nn.Sequential(*(PSABlock_Mona(self.c, attn_ratio=0.5, num_heads=self.c // 64) for _ in range(n)))
 
 
-class TSSAlock_DYT_Mona(PSABlock):
+class SD_PSABlock_Mona(PSABlock):
     """
-    PSABlock with TSSA + DynamicTanh + Mona（三重增强）
+    PSABlock with statistical attention + DynamicTanh + Mona（三重增强）
     结合Token统计注意力、动态Tanh归一化和Mona的PSA块
 
     特点:
@@ -885,12 +885,12 @@ class TSSAlock_DYT_Mona(PSABlock):
         self.mona2 = Mona(c)
 
         # Token统计自注意力
-        self.attn = AttentionTSSA(c, num_heads=num_heads)
+        self.attn = StatisticalAttention(c, num_heads=num_heads)
 
     def forward(self, x):
-        """Executes a forward pass with TSSA, DynamicTanh and Mona."""
+        """Executes a forward pass with statistical attention, DynamicTanh and Mona."""
         BS, C, H, W = x.size()
-        # TSSA注意力 + DynamicTanh归一化
+        # statistical attention注意力 + DynamicTanh归一化
         x = x + self.attn(self.dyt1(x).flatten(2).permute(0, 2, 1)).permute(0, 2, 1).view([-1, C, H, W]).contiguous() if self.add else self.attn(self.dyt1(x).flatten(2).permute(0, 2, 1)).permute(0, 2, 1).view([-1, C, H, W]).contiguous()
         # Mona归一化
         x = self.mona1(x)
@@ -903,7 +903,7 @@ class TSSAlock_DYT_Mona(PSABlock):
 
 class SD_PSA_Mona(C2PSA):
     """
-    C2PSA with TSSA + DynamicTanh + Mona（三重增强）
+    C2PSA with statistical attention + DynamicTanh + Mona（三重增强）
     结合Token统计注意力、动态Tanh归一化和Mona的C2PSA变体
 
     来源:
@@ -924,12 +924,12 @@ class SD_PSA_Mona(C2PSA):
     """
     def __init__(self, c1, c2, n=1, e=0.5):
         super().__init__(c1, c2, n, e)
-        self.m = nn.Sequential(*(TSSAlock_DYT_Mona(self.c, attn_ratio=0.5, num_heads=self.c // 64) for _ in range(n)))
+        self.m = nn.Sequential(*(SD_PSABlock_Mona(self.c, attn_ratio=0.5, num_heads=self.c // 64) for _ in range(n)))
 
 
-class TSSAlock_DYT_Mona_SEFN(PSABlock):
+class SD_PSABlock_Mona_SEFN(PSABlock):
     """
-    PSABlock with TSSA + DYT + Mona + SEFN（四重增强）
+    PSABlock with statistical attention + DYT + Mona + SEFN（四重增强）
     结合Token统计注意力、动态Tanh归一化、Mona和空间增强FFN的PSA块
 
     特点:
@@ -954,13 +954,13 @@ class TSSAlock_DYT_Mona_SEFN(PSABlock):
         self.mona2 = Mona(c)
 
         # Token统计自注意力
-        self.attn = AttentionTSSA(c, num_heads=num_heads)
+        self.attn = StatisticalAttention(c, num_heads=num_heads)
 
     def forward(self, x):
-        """Executes a forward pass with TSSA, DYT, Mona and SEFN."""
+        """Executes a forward pass with statistical attention, DYT, Mona and SEFN."""
         x_spatial = x  # 保存用于SEFN的空间特征
         BS, C, H, W = x.size()
-        # TSSA注意力 + DynamicTanh归一化
+        # statistical attention注意力 + DynamicTanh归一化
         x = x + self.attn(self.dyt1(x).flatten(2).permute(0, 2, 1)).permute(0, 2, 1).view([-1, C, H, W]).contiguous() if self.add else self.attn(self.dyt1(x).flatten(2).permute(0, 2, 1)).permute(0, 2, 1).view([-1, C, H, W]).contiguous()
         # Mona归一化
         x = self.mona1(x)
@@ -973,7 +973,7 @@ class TSSAlock_DYT_Mona_SEFN(PSABlock):
 
 class SD_PSA_Mona_SEFN(C2PSA):
     """
-    C2PSA with TSSA + DYT + Mona + SEFN（四重增强）
+    C2PSA with statistical attention + DYT + Mona + SEFN（四重增强）
     结合Token统计注意力、动态Tanh归一化、Mona和空间增强FFN的C2PSA变体
 
     来源:
@@ -996,12 +996,12 @@ class SD_PSA_Mona_SEFN(C2PSA):
     """
     def __init__(self, c1, c2, n=1, e=0.5):
         super().__init__(c1, c2, n, e)
-        self.m = nn.Sequential(*(TSSAlock_DYT_Mona_SEFN(self.c, attn_ratio=0.5, num_heads=self.c // 64) for _ in range(n)))
+        self.m = nn.Sequential(*(SD_PSABlock_Mona_SEFN(self.c, attn_ratio=0.5, num_heads=self.c // 64) for _ in range(n)))
 
 
-class TSSAlock_DYT_Mona_SEFFN(PSABlock):
+class SD_PSABlock_Mona_SEFFN(PSABlock):
     """
-    PSABlock with TSSA + DYT + Mona + SEFFN（四重增强）
+    PSABlock with statistical attention + DYT + Mona + SEFFN（四重增强）
     结合Token统计注意力、动态Tanh归一化、Mona和频谱增强FFN的PSA块
 
     特点:
@@ -1026,12 +1026,12 @@ class TSSAlock_DYT_Mona_SEFFN(PSABlock):
         self.mona2 = Mona(c)
 
         # Token统计自注意力
-        self.attn = AttentionTSSA(c, num_heads=num_heads)
+        self.attn = StatisticalAttention(c, num_heads=num_heads)
 
     def forward(self, x):
-        """Executes a forward pass with TSSA, DYT, Mona and SEFFN."""
+        """Executes a forward pass with statistical attention, DYT, Mona and SEFFN."""
         BS, C, H, W = x.size()
-        # TSSA注意力 + DynamicTanh归一化
+        # statistical attention注意力 + DynamicTanh归一化
         x = x + self.attn(self.dyt1(x).flatten(2).permute(0, 2, 1)).permute(0, 2, 1).view([-1, C, H, W]).contiguous() if self.add else self.attn(self.dyt1(x).flatten(2).permute(0, 2, 1)).permute(0, 2, 1).view([-1, C, H, W]).contiguous()
         # Mona归一化
         x = self.mona1(x)
@@ -1044,7 +1044,7 @@ class TSSAlock_DYT_Mona_SEFFN(PSABlock):
 
 class SD_PSA_Mona_SEFFN(C2PSA):
     """
-    C2PSA with TSSA + DYT + Mona + SEFFN（四重增强）
+    C2PSA with statistical attention + DYT + Mona + SEFFN（四重增强）
     结合Token统计注意力、动态Tanh归一化、Mona和频谱增强FFN的C2PSA变体
 
     来源:
@@ -1067,12 +1067,12 @@ class SD_PSA_Mona_SEFFN(C2PSA):
     """
     def __init__(self, c1, c2, n=1, e=0.5):
         super().__init__(c1, c2, n, e)
-        self.m = nn.Sequential(*(TSSAlock_DYT_Mona_SEFFN(self.c, attn_ratio=0.5, num_heads=self.c // 64) for _ in range(n)))
+        self.m = nn.Sequential(*(SD_PSABlock_Mona_SEFFN(self.c, attn_ratio=0.5, num_heads=self.c // 64) for _ in range(n)))
 
 
-class TSSAlock_DYT_Mona_EDFFN(PSABlock):
+class SD_PSABlock_Mona_EDFFN(PSABlock):
     """
-    PSABlock with TSSA + DYT + Mona + EDFFN（四重增强，最强配置）
+    PSABlock with statistical attention + DYT + Mona + EDFFN（四重增强，最强配置）
     结合Token统计注意力、动态Tanh归一化、Mona和增强动态FFN的PSA块
 
     特点:
@@ -1097,12 +1097,12 @@ class TSSAlock_DYT_Mona_EDFFN(PSABlock):
         self.mona2 = Mona(c)
 
         # Token统计自注意力
-        self.attn = AttentionTSSA(c, num_heads=num_heads)
+        self.attn = StatisticalAttention(c, num_heads=num_heads)
 
     def forward(self, x):
-        """Executes a forward pass with TSSA, DYT, Mona and EDFFN."""
+        """Executes a forward pass with statistical attention, DYT, Mona and EDFFN."""
         BS, C, H, W = x.size()
-        # TSSA注意力 + DynamicTanh归一化
+        # statistical attention注意力 + DynamicTanh归一化
         x = x + self.attn(self.dyt1(x).flatten(2).permute(0, 2, 1)).permute(0, 2, 1).view([-1, C, H, W]).contiguous() if self.add else self.attn(self.dyt1(x).flatten(2).permute(0, 2, 1)).permute(0, 2, 1).view([-1, C, H, W]).contiguous()
         # Mona归一化
         x = self.mona1(x)
@@ -1115,7 +1115,7 @@ class TSSAlock_DYT_Mona_EDFFN(PSABlock):
 
 class SD_PSA_Mona_EDFFN(C2PSA):
     """
-    C2PSA with TSSA + DYT + Mona + EDFFN（四重增强，最强配置）
+    C2PSA with statistical attention + DYT + Mona + EDFFN（四重增强，最强配置）
     结合Token统计注意力、动态Tanh归一化、Mona和增强动态FFN的C2PSA变体
 
     来源:
@@ -1139,4 +1139,4 @@ class SD_PSA_Mona_EDFFN(C2PSA):
     """
     def __init__(self, c1, c2, n=1, e=0.5):
         super().__init__(c1, c2, n, e)
-        self.m = nn.Sequential(*(TSSAlock_DYT_Mona_EDFFN(self.c, attn_ratio=0.5, num_heads=self.c // 64) for _ in range(n)))
+        self.m = nn.Sequential(*(SD_PSABlock_Mona_EDFFN(self.c, attn_ratio=0.5, num_heads=self.c // 64) for _ in range(n)))

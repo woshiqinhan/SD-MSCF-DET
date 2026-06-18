@@ -32,7 +32,7 @@ __all__ = [
     'TopkRouting', 'LayerNormProxy', 'DynamicPosBias', 'DynamicTanh',
     # 注意力机制模块
     'BiLevelRoutingAttention_nchw', 'LocalWindowAttention', 'DAttention',
-    'DPB_Attention', 'PolaLinearAttention', 'AttentionTSSA',
+    'DPB_Attention', 'PolaLinearAttention', 'StatisticalAttention',
     'AdaptiveSparseSA', 'MSLA',
     # ASSA辅助模块
     'LinearProjection', 'WindowAttention_sparse', 'Mlp', 'LeFF', 'FRFN',
@@ -870,7 +870,7 @@ class PolaLinearAttention(nn.Module):
 
 # ================================ Token Statistics Self-Attention ================================
 
-class AttentionTSSA(nn.Module):
+class StatisticalAttention(nn.Module):
     """
     Token Statistics Self-Attention from ToST (ICLR 2025)
     https://github.com/RobinWu218/ToST

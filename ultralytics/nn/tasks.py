@@ -24,7 +24,6 @@ import torch.nn as nn
 # from ultralytics.nn.backbone.UniRepLKNet import *
 # from ultralytics.nn.backbone.TransNext import *
 # from ultralytics.nn.backbone.rmt import *
-# from ultralytics.nn.backbone.pkinet import *
 # from ultralytics.nn.backbone.mobilenetv4 import *
 # from ultralytics.nn.backbone.starnet import *
 # from ultralytics.nn.backbone.inceptionnext import *
@@ -302,8 +301,8 @@ try:
         DPBlock,
         C2Pola,
         Polalock,
-        C2TSSA,
-        TSSAlock,
+        StatisticalPSA,
+        StatisticalPSABlock,
         # Batch 3 - 注意力机制变体 + 归一化增强变体
         C2ASSA,
         ASSAlock,
@@ -312,7 +311,7 @@ try:
         C2PSA_DYT,
         PSABlock_DYT,
         SD_PSA,
-        TSSAlock_DYT,
+        SD_PSABlock,
         C2Pola_DYT,
         Polalock_DYT,
         # Batch 4 - FFN增强变体
@@ -330,13 +329,13 @@ try:
         C2PSA_Mona,
         PSABlock_Mona,
         SD_PSA_Mona,
-        TSSAlock_DYT_Mona,
+        SD_PSABlock_Mona,
         SD_PSA_Mona_SEFN,
-        TSSAlock_DYT_Mona_SEFN,
+        SD_PSABlock_Mona_SEFN,
         SD_PSA_Mona_SEFFN,
-        TSSAlock_DYT_Mona_SEFFN,
+        SD_PSABlock_Mona_SEFFN,
         SD_PSA_Mona_EDFFN,
-        TSSAlock_DYT_Mona_EDFFN,
+        SD_PSABlock_Mona_EDFFN,
     )
     C2PSA_EXTRACTION_AVAILABLE = True
 except ImportError as _err:
@@ -349,11 +348,11 @@ except ImportError as _err:
 
     for _name in [
         'C2PSA', 'C2fPSA', 'C2BRA', 'BRABlock', 'C2CGA', 'CGABlock', 'C2DA', 'DABlock', 'C2DPB', 'DPBlock',
-        'C2Pola', 'Polalock', 'C2TSSA', 'TSSAlock', 'C2ASSA', 'ASSAlock', 'C2MSLA', 'MSLAlock', 'C2PSA_DYT',
-        'PSABlock_DYT', 'SD_PSA', 'TSSAlock_DYT', 'C2Pola_DYT', 'Polalock_DYT', 'C2PSA_FMFFN', 'PSABlock_FMFFN',
+        'C2Pola', 'Polalock', 'StatisticalPSA', 'StatisticalPSABlock', 'C2ASSA', 'ASSAlock', 'C2MSLA', 'MSLAlock', 'C2PSA_DYT',
+        'PSABlock_DYT', 'SD_PSA', 'SD_PSABlock', 'C2Pola_DYT', 'Polalock_DYT', 'C2PSA_FMFFN', 'PSABlock_FMFFN',
         'C2PSA_CGLU', 'PSABlock_CGLU', 'C2PSA_SEFN', 'PSABlock_SEFN', 'C2PSA_SEFFN', 'PSABlock_SEFFN', 'C2PSA_EDFFN',
-        'PSABlock_EDFFN', 'C2PSA_Mona', 'PSABlock_Mona', 'SD_PSA_Mona', 'TSSAlock_DYT_Mona', 'SD_PSA_Mona_SEFN',
-        'TSSAlock_DYT_Mona_SEFN', 'SD_PSA_Mona_SEFFN', 'TSSAlock_DYT_Mona_SEFFN', 'SD_PSA_Mona_EDFFN', 'TSSAlock_DYT_Mona_EDFFN',
+        'PSABlock_EDFFN', 'C2PSA_Mona', 'PSABlock_Mona', 'SD_PSA_Mona', 'SD_PSABlock_Mona', 'SD_PSA_Mona_SEFN',
+        'SD_PSABlock_Mona_SEFN', 'SD_PSA_Mona_SEFFN', 'SD_PSABlock_Mona_SEFFN', 'SD_PSA_Mona_EDFFN', 'SD_PSABlock_Mona_EDFFN',
     ]:
         globals()[_name] = _missing_c2psa
 
@@ -539,7 +538,7 @@ C2PSA_CLASS: tuple = ()
 if C2PSA_EXTRACTION_AVAILABLE:
     C2PSA_CLASS = (C2PSA, C2fPSA) + (
         # Batch 1/2/3 - 注意力主干变体
-        C2BRA, C2CGA, C2DA, C2DPB, C2Pola, C2TSSA, C2ASSA, C2MSLA,
+        C2BRA, C2CGA, C2DA, C2DPB, C2Pola, StatisticalPSA, C2ASSA, C2MSLA,
         C2PSA_DYT, SD_PSA, C2Pola_DYT,
         # Batch 4 - FFN 增强
         C2PSA_FMFFN, C2PSA_CGLU, C2PSA_SEFN, C2PSA_SEFFN, C2PSA_EDFFN,
@@ -2440,7 +2439,7 @@ def parse_model(d, ch, verbose=True, dataset_config=None):
                     shortcut = args[2]
                 args = [c2_val, ks, shortcut]
 
-        # PKIModule 复合参数
+        # MSCF_Block 复合参数
         elif module is MSCF_C3:
             need_fill = len(args) < 6 or isinstance(args[1], bool)
             if need_fill or not hasattr(args[1], "__iter__"):

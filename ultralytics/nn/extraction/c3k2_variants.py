@@ -23,7 +23,7 @@ from ultralytics.nn.public import RelPos2d, RetBlock, HeatBlock, WTConv2d, FMB
 from .c3k2_base import (
     # Batch 1 组件
     C3k_Faster, C3k_PConv, C3k_ODConv, C3k_Faster_EMA,C3k_Faster_CGLU,C3k_FocusedLinearAttention,C3k_gConv,C3k_MLCA,
-    C3k_DBB, C3k_WDBB, C3k_DeepDBB,C3k_PKIModule,C3k_PPA,C3k_Star,C3k_Star_CAA,C3k_SWC,C3k_UniRepLKNetBlock,
+    C3k_DBB, C3k_WDBB, C3k_DeepDBB,C3k_MSCF,C3k_PPA,C3k_Star,C3k_Star_CAA,C3k_SWC,C3k_UniRepLKNetBlock,
     Faster_Block, Faster_Block_EMA,
     Bottleneck_PConv, Bottleneck_ODConv,
     Bottleneck_DBB, Bottleneck_WDBB, Bottleneck_DeepDBB,
@@ -1055,7 +1055,7 @@ class C3k2_RVB_EMA(nn.Module):
         return self.cv2(torch.cat(y, 1))
 
 
-# ===================== Batch 9: PKIModule, PPA, Faster_CGLU, Star =====================
+# ===================== Batch 9: MSCF_Block, PPA, Faster_CGLU, Star =====================
 
 class MSCF_C3(nn.Module):
     """MSCF-C3 multi-scale convolutional feature extraction module.
@@ -1067,7 +1067,7 @@ class MSCF_C3(nn.Module):
         c2: 输出通道数
         n: Bottleneck重复次数，默认为1
         kernel_sizes: 多尺度卷积核大小序列，默认(3, 5, 7, 9, 11)
-        expansion: PKIModule内部扩展比例，默认1.0
+        expansion: MSCF_Block内部扩展比例，默认1.0
         with_caa: 是否使用CAA注意力，默认True
         caa_kernel_size: CAA卷积核大小，默认11
         add_identity: 是否添加恒等映射，默认True
@@ -1082,8 +1082,8 @@ class MSCF_C3(nn.Module):
         self.cv1 = Conv(c1, 2 * self.c, 1, 1)
         self.cv2 = Conv((2 + n) * self.c, c2, 1)
         self.m = nn.ModuleList(
-            C3k_PKIModule(self.c, self.c, 2, kernel_sizes, expansion, with_caa, caa_kernel_size, add_identity) if c3k
-            else PKIModule(self.c, self.c, kernel_sizes, expansion, with_caa, caa_kernel_size, add_identity)
+            C3k_MSCF(self.c, self.c, 2, kernel_sizes, expansion, with_caa, caa_kernel_size, add_identity) if c3k
+            else MSCF_Block(self.c, self.c, kernel_sizes, expansion, with_caa, caa_kernel_size, add_identity)
             for _ in range(n)
         )
 
@@ -1771,7 +1771,7 @@ import torch.nn as nn
 
 class AMSCF_C3(nn.Module):
     """
-    带自适应校准机制的 C3k2-PKI 模块 (Adaptive C3k2-PKI)
+    带自适应校准机制的 C3k2-MSCF 模块 (Adaptive C3k2-MSCF)
     创新点：引入可学习的特征缩放因子，实现跨分支特征的动态对齐
     """
 
@@ -1788,8 +1788,8 @@ class AMSCF_C3(nn.Module):
         self.alpha = nn.Parameter(torch.ones((2 + n), 1, 1, 1))
 
         self.m = nn.ModuleList(
-            C3k_PKIModule(self.c, self.c, 2, kernel_sizes, expansion, with_caa, caa_kernel_size, add_identity) if c3k
-            else PKIModule(self.c, self.c, kernel_sizes, expansion, with_caa, caa_kernel_size, add_identity)
+            C3k_MSCF(self.c, self.c, 2, kernel_sizes, expansion, with_caa, caa_kernel_size, add_identity) if c3k
+            else MSCF_Block(self.c, self.c, kernel_sizes, expansion, with_caa, caa_kernel_size, add_identity)
             for _ in range(n)
         )
 
@@ -1797,7 +1797,7 @@ class AMSCF_C3(nn.Module):
         # 1. 初始分裂
         y = list(self.cv1(x).chunk(2, 1))
 
-        # 2. 经过 PKI 模块的特征提取
+        # 2. 经过 MSCF 模块的特征提取
         # 我们在这里保留 C2f 的多分支连接特性
         y.extend(m(y[-1]) for m in self.m)
 
@@ -1856,7 +1856,7 @@ class DynamicTanh(nn.Module):
 class DMSF_Unit(nn.Module):
     """
     创新单元: Dynamic Multi-scale Statistical Fusion Unit
-    功能: 结合多尺度空域感知 (PKI思想) 与 全局统计动态注意力 (TSSA思想)
+    功能: 结合多尺度空域感知 (MSCF思想) 与 全局统计动态注意力 (statistical attention思想)
     """
 
     def __init__(self, c, kernel_sizes=(3, 5, 7), expansion=1.0, add_identity=True):
