@@ -1,0 +1,29 @@
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.idea/
+.vscode/
+.venv/
+venv/
+
+# Datasets, checkpoints, and experiment outputs
+datasets/
+data/
+runs/
+results/
+weights/
+wandb/
+*.pt
+*.pth
+*.onnx
+*.engine
+*.ev4a
+
+# Local Ultralytics state
+.yolo-config/
+ultralytics_settings.json
+
