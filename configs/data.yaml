@@ -1,0 +1,17 @@
+path: /path/to/M3FD_split
+train: images/train
+val: images/val
+test: images/test
+
+modalities:
+  rgb: images
+  ir: images_ir
+models: [rgb, ir]
+
+names:
+  0: People
+  1: Car
+  2: Bus
+  3: Motorcycle
+  4: Lamp
+  5: Truck

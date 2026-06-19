@@ -1,0 +1,115 @@
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+"""
+Ultralytics neural network modules.
+
+This module provides access to various neural network components used in Ultralytics models, including convolution
+blocks, attention mechanisms, transformer components, and detection/segmentation heads.
+
+Examples:
+    Visualize a module with Netron
+    >>> from ultralytics.nn.modules import *
+    >>> import torch
+    >>> import os
+    >>> x = torch.ones(1, 128, 40, 40)
+    >>> m = Conv(128, 128)
+    >>> f = f"{m._get_name()}.onnx"
+    >>> torch.onnx.export(m, x, f)
+    >>> os.system(f"onnxslim {f} {f} && open {f}")  # pip install onnxslim
+"""
+
+from .block import (
+    C1,
+    C2,
+    C2PSA,
+    C3,
+    C3k,
+    C3TR,
+    CIB,
+    DFL,
+    ELAN1,
+    PSA,
+    SPP,
+    SPPELAN,
+    SPPF,
+    A2C2f,
+    AConv,
+    ADown,
+    Attention,
+    BasicBlock,
+    BNContrastiveHead,
+    Blocks,
+    Bottleneck,
+    BottleneckCSP,
+    C2f,
+    C2fAttn,
+    C2fCIB,
+    C2fPSA,
+    C3Ghost,
+    C3k2,
+    C3x,
+    CBFuse,
+    CBLinear,
+    ContrastiveHead,
+    ConvNormLayer,
+    GhostBottleneck,
+    HGBlock,
+    HGStem,
+    ImagePoolingAttn,
+    MaxSigmoidAttnBlock,
+    Proto,
+    RepC3,
+    RepNCSPELAN4,
+    RepVGGDW,
+    ResNetLayer,
+    RTDETRBottleNeck,
+    SCDown,
+    TorchVision,
+    get_activation,
+)
+from .conv import (
+    CBAM,
+    ChannelAttention,
+    Concat,
+    Conv,
+    Conv2,
+    ConvTranspose,
+    DSConv,
+    DWConv,
+    DWConvTranspose2d,
+    Focus,
+    GhostConv,
+    Index,
+    LightConv,
+    RepConv,
+    SpatialAttention,
+)
+from .head import (
+    OBB,
+    Classify,
+    Detect,
+    LRPCHead,
+    Pose,
+    RTDETRDecoder,
+    Segment,
+    WorldDetect,
+    YOLOEDetect,
+    YOLOESegment,
+    v8Detect,
+    v10Detect,
+)
+from .transformer import (
+    AIFI,
+    MLP,
+    DeformableTransformerDecoder,
+    DeformableTransformerDecoderLayer,
+    LayerNorm2d,
+    MLPBlock,
+    MSDeformAttn,
+    TransformerBlock,
+    TransformerEncoderLayer,
+    TransformerLayer,
+)
+
+from .sd_mscf import MSCF_C3, SD_PSA
+
+__all__ = tuple(name for name in globals() if not name.startswith("_"))
