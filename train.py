@@ -1,5 +1,3 @@
-"""Train the SD-MSCF-DET multimodal detector."""
-
 import argparse
 import os
 from pathlib import Path
@@ -13,7 +11,7 @@ from ultralytics import YOLOMM
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description="Train the SD-MSCF-DET multimodal detector")
     parser.add_argument("--model", type=Path, default=ROOT / "configs" / "SD-MSCF-DET.yaml")
     parser.add_argument("--data", type=Path, default=ROOT / "configs" / "data.yaml")
     parser.add_argument("--epochs", type=int, default=300)

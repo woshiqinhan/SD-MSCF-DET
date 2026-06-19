@@ -9,30 +9,6 @@ from pathlib import Path
 
 import torch
 import torch.nn as nn
-# Extra modules conditional import（默认禁用）
-# from ultralytics.nn.extra_modules import *
-# from ultralytics.nn.backbone.convnextv2 import *
-# from ultralytics.nn.backbone.fasternet import *
-# from ultralytics.nn.backbone.efficientViT import *
-# from ultralytics.nn.backbone.EfficientFormerV2 import *
-# from ultralytics.nn.backbone.VanillaNet import *
-# from ultralytics.nn.backbone.revcol import *
-# from ultralytics.nn.backbone.lsknet import *
-# from ultralytics.nn.backbone.SwinTransformer import *
-# from ultralytics.nn.backbone.repvit import *
-# from ultralytics.nn.backbone.CSwomTramsformer import *
-# from ultralytics.nn.backbone.UniRepLKNet import *
-# from ultralytics.nn.backbone.TransNext import *
-# from ultralytics.nn.backbone.rmt import *
-# from ultralytics.nn.backbone.mobilenetv4 import *
-# from ultralytics.nn.backbone.starnet import *
-# from ultralytics.nn.backbone.inceptionnext import *
-# from ultralytics.nn.extra_modules.mobileMamba.mobilemamba import *
-# from ultralytics.nn.backbone.MambaOut import *
-# from ultralytics.nn.backbone.overlock import *
-# from ultralytics.nn.backbone.lsnet import *
-# except:
-#     pass
 from ultralytics.nn.autobackend import check_class_names
 from ultralytics.nn.modules import (
     # non-fusion modules (keep explicit import)
@@ -101,12 +77,6 @@ from ultralytics.nn.modules import (
     get_activation,
 )
 
-# Optional architectures were removed from this research release. These sentinels
-# keep legacy parser branches inert without importing their implementation files.
-FeatureFusion = FCM = FCMFeatureFusion = ConvMixFusion = ScalarGate = ChannelGate = None
-CAM = SEFN = FusionConvMSAA = MSC = SpatialDependencyPerception = None
-SpatialPriorModuleLite = CrossTransformerFusion = MultiHeadCrossAttention = None
-ConvFFN_GLU = DEA = DConv = MCFGatedFusion = C2f_BiFocus = RepNCSPELAND = None
 from ultralytics.utils import DEFAULT_CFG_DICT, DEFAULT_CFG_KEYS, LOGGER, YAML, colorstr, emojis
 from ultralytics.utils.checks import check_requirements, check_suffix, check_yaml
 from ultralytics.utils.loss import (
@@ -144,18 +114,9 @@ try:
 except Exception:
     CONTRAST_AVAILABLE = False
 
-Detect_LSCD = Segment_LSCD = Pose_LSCD = OBB_LSCD = None
-LSCD_AVAILABLE = False
-
-from ultralytics.nn.Neck import CSPOmniKernel, GSConvE, SNI, SPDConv
-MFM = None
-
+from ultralytics.nn.Neck import GSConvE, SNI
 from ultralytics.nn.modules.sd_mscf import MSCF_C3, SD_PSA
 
-C3K2_EXTRACTION_AVAILABLE = False
-C2PSA_EXTRACTION_AVAILABLE = False
-SPPF_EXTRACTION_AVAILABLE = False
-NECK_EXTRACTION_AVAILABLE = False
 # ===== Head Class Sets (align with upstream behavior) =====
 # 统一以集合方式识别检测/分割/姿态/旋转头，便于在 parse_model/_apply/stride 推断等位置一致处理。
 DETECT_CLASS: tuple = (
@@ -173,17 +134,7 @@ SEGMENT_CLASS: tuple = (
 POSE_CLASS: tuple = (Pose,)
 OBB_CLASS: tuple = (OBB,)
 
-# 动态扩展 LSCD 系列头
-if LSCD_AVAILABLE:
-    DETECT_CLASS = DETECT_CLASS + (Detect_LSCD,)
-    SEGMENT_CLASS = SEGMENT_CLASS + (Segment_LSCD,)
-    POSE_CLASS = POSE_CLASS + (Pose_LSCD,)
-    OBB_CLASS = OBB_CLASS + (OBB_LSCD,)
-
-# Module sets required by SD-MSCF-DET.
-NECK_CLASS: tuple = ()
 C3K2_CLASS: tuple = (C3k2, MSCF_C3)
-SPPF_CLASS: tuple = (SPPF,)
 C2PSA_CLASS: tuple = (C2PSA, SD_PSA)
 
 class BaseModel(torch.nn.Module):
@@ -614,7 +565,7 @@ class DetectionModel(BaseModel):
         # Build strides
         m = self.model[-1]  # Detect()/Segment()/Pose()/OBB()/...
         heads = DETECT_CLASS + SEGMENT_CLASS + POSE_CLASS + OBB_CLASS
-        if isinstance(m, heads):  # includes all Detect/Segment/Pose/OBB subclasses (e.g., LSCD variants)
+        if isinstance(m, heads):
             s = 256  # 2x min stride
             m.inplace = self.inplace
 
@@ -1821,47 +1772,6 @@ def attempt_load_one_weight(weight, device=None, inplace=True, fuse=False):
     return model, ckpt
 
 
-def _validate_and_fill_dea_args(args, c_left):
-    """Validate DEA args strictly and auto-fill only the channel when为None.
-
-    期望签名：DEA(channel, kernel_size, p_kernel=None, m_kernel=None, reduction=16)
-    允许的最简形式：DEA([None, kernel_size]) 或 DEA([channel, kernel_size])。
-    不做旧参数顺序的自动更正，遇到不合规直接报错。
-    """
-    a = list(args) if isinstance(args, (list, tuple)) else [args]
-
-    # 最简形式 [channel/None, kernel_size]
-    if len(a) == 2:
-        ch, ks = a
-        ch = c_left if ch is None else ch
-        if not isinstance(ch, int) or not isinstance(ks, int) or ks <= 0:
-            raise ValueError(
-                f"DEA expects [channel(or None), kernel_size] as minimal form, got {args}"
-            )
-        return [ch, ks, None, None, 16]
-
-    # 完整形式：补齐长度到5
-    while len(a) < 5:
-        a.append(None)
-    ch, ks, pk, mk, rd = a[:5]
-    ch = c_left if ch is None else ch
-    # 严格校验类型与取值
-    if not isinstance(ch, int) or ch <= 0:
-        raise ValueError(f"DEA arg[0]=channel must be positive int, got {ch}")
-    if not isinstance(ks, int) or ks <= 0:
-        raise ValueError(f"DEA arg[1]=kernel_size must be positive int, got {ks}")
-    if pk is not None and (not isinstance(pk, (list, tuple)) or len(pk) != 2):
-        raise ValueError(f"DEA arg[2]=p_kernel must be 2-list/tuple or None, got {pk}")
-    if mk is not None and (not isinstance(mk, (list, tuple)) or len(mk) != 2):
-        raise ValueError(f"DEA arg[3]=m_kernel must be 2-list/tuple or None, got {mk}")
-    if rd is None:
-        rd = 16
-    if not isinstance(rd, int) or rd <= 0:
-        raise ValueError(f"DEA arg[4]=reduction must be positive int, got {rd}")
-
-    return [ch, ks, pk, mk, rd]
-
-
 def parse_model(d, ch, verbose=True, dataset_config=None):
     """
     Parse a YOLO model.yaml dictionary into a PyTorch model.
@@ -1928,8 +1838,7 @@ def parse_model(d, ch, verbose=True, dataset_config=None):
             Bottleneck,
             GhostBottleneck,
             SPP,
-            # 支持 SPPF 及其变体
-            *SPPF_CLASS,
+            SPPF,
             # C2PSA 系列在 C2PSA_CLASS 中统一管理
             DWConv,
             Focus,
@@ -1937,9 +1846,7 @@ def parse_model(d, ch, verbose=True, dataset_config=None):
             C1,
             C2,
             C2f,
-            C2f_BiFocus,
             RepNCSPELAN4,
-            RepNCSPELAND,  # ELAN followed by dictionary injection (YOLO-RD)
             ELAN1,
             ADown,
             AConv,
@@ -1957,7 +1864,7 @@ def parse_model(d, ch, verbose=True, dataset_config=None):
             C2fCIB,
             A2C2f,
             ConvNormLayer,  # RTDETR module
-        } | set(C3K2_CLASS) | set(C2PSA_CLASS) | set(NECK_CLASS)  # 动态添加已迁移模块
+        } | set(C3K2_CLASS) | set(C2PSA_CLASS)
     )
     repeat_modules = frozenset(  # modules with 'repeat' arguments
         {
@@ -1965,7 +1872,6 @@ def parse_model(d, ch, verbose=True, dataset_config=None):
             C1,
             C2,
             C2f,
-            C2f_BiFocus,
             C2fAttn,
             C3,
             C3TR,
@@ -1990,29 +1896,6 @@ def parse_model(d, ch, verbose=True, dataset_config=None):
             if verbose:
                 LOGGER.warning(f"MultiModal router initialization failed: {e}")
     # ===== MULTIMODAL EXTENSION END =====
-
-    # 通用解析子程序：两输入的跨模态注意力/融合模块（CTF/MHCA）
-    def _parse_two_input_equal_attn(module, f, args, ch, i):
-        if isinstance(f, int) or len(f) != 2:
-            raise ValueError(f"{module.__name__} expects 2 inputs, got {f} at layer {i}")
-        c_left, c_right = ch[f[0]], ch[f[1]]
-        # Auto-fill first dim arg if missing/None
-        if len(args) == 0:
-            args.insert(0, c_left)
-        else:
-            if args[0] is None:
-                args[0] = c_left
-        # Module-specific defaults and output channel calc
-        if module is MultiHeadCrossAttention:
-            # Ensure num_heads exists
-            if len(args) < 2:
-                args.append(2)
-            c2_val = c_left  # tuple outputs with per-branch channels = C
-        elif module is CrossTransformerFusion:
-            c2_val = c_left * 2  # concat two branches
-        else:
-            c2_val = c_left
-        return c2_val, args
 
     # 针对 C3k2 变体的参数归一化，补齐缺失的关键形参以匹配上游实现
     def _normalize_c3k2_args(module, raw_args):
@@ -2107,122 +1990,12 @@ def parse_model(d, ch, verbose=True, dataset_config=None):
             args = [ch[f]]
         elif m is Concat:
             c2 = sum(ch[x] for x in f)
-        # ===== GOLD-YOLO / 提取类池化-融合模块 =====
-        elif SPPF_EXTRACTION_AVAILABLE and m in frozenset({SimFusion_4in, AdvPoolFusion}):
-            # 纯拼接型融合，输出通道为所有输入之和
-            c2 = sum(ch[x] for x in f)
-        elif SPPF_EXTRACTION_AVAILABLE and m is SimFusion_3in:
-            # SimFusion_3in([c0,c1,c2], out)
-            c2 = args[0]
-            if c2 != nc:
-                c2 = make_divisible(min(c2, max_channels) * width, 8)
-            args = [[ch[f_] for f_ in f], c2]
-        elif SPPF_EXTRACTION_AVAILABLE and m is IFM:
-            # IFM(c1, [o1,o2,...], embed_dim_p=96, fuse_block_num=3)
-            c1 = ch[f]
-            c2 = sum(args[0])
-            args = [c1, *args]
-        elif SPPF_EXTRACTION_AVAILABLE and m is InjectionMultiSum_Auto_pool:
-            # InjectionMultiSum_Auto_pool(inp, oup, global_inp, flag), f=[local, global]
-            c1 = ch[f[0]]
-            c2 = args[0]
-            args = [c1, *args]
-        elif SPPF_EXTRACTION_AVAILABLE and m is PyramidPoolAgg:
-            # PyramidPoolAgg(inc=sum(inputs), ouc=args[0], stride, pool_mode='torch')
-            c2 = args[0]
-            args = [sum(ch[x] for x in f), *args]
-        elif SPPF_EXTRACTION_AVAILABLE and m is PyramidPoolAgg_PCE:
-            # 输出为各输入池化后拼接，通道为输入之和
-            c2 = sum(ch[x] for x in f)
-        elif SPPF_EXTRACTION_AVAILABLE and m is WaveletPool:
-            # 小波下采样，通道*4
-            c2 = ch[f] * 4
-        # DEA 专用分支：允许旧风格参数并归一化到新签名
-        elif m is DEA:
-            # Expect exactly two inputs; output channels follow the left branch
-            if isinstance(f, int) or len(f) != 2:
-                raise ValueError(f"{m.__name__} expects 2 inputs, got {f} at layer {i}")
-            c_left, c_right = ch[f[0]], ch[f[1]]
-            args = _validate_and_fill_dea_args(args, c_left)
-            c2 = c_left
-        elif m is MCFGatedFusion:
-            if isinstance(f, int) or len(f) < 2:
-                raise ValueError(f"{m.__name__} expects >=2 inputs, got {f} at layer {i}")
-            mode = args[0] if len(args) > 0 else "add"
-            k = args[1] if len(args) > 1 else 1
-            c_out = args[2] if len(args) > 2 and args[2] else None
-            main_idx = args[3] if len(args) > 3 else 0
-            aux_idx = args[4] if len(args) > 4 else 1
-            zero_init = args[5] if len(args) > 5 else True
-            use_bn = args[6] if len(args) > 6 else False
-            act = args[7] if len(args) > 7 else True
-
-            c_main = ch[f[main_idx]]
-            c_aux = ch[f[aux_idx]]
-            c_out = c_out or c_main
-            if c_out != nc:
-                c_out = make_divisible(min(c_out, max_channels) * width, 8)
-            args = [c_main, c_aux, c_out, mode, k, 1, None, 1, main_idx, aux_idx, zero_init, use_bn, act]
-            c2 = c_main
-        # 其他融合模块（与多模态路由无关的纯特征融合），要求两路输入空间尺寸一致
-        elif m in frozenset({FeatureFusion, FCM, FCMFeatureFusion, ConvMixFusion, ScalarGate, ChannelGate, CAM, SEFN, FusionConvMSAA, MSC, SpatialDependencyPerception}):
-            # Expect exactly two inputs; output channels follow the left branch
-            if isinstance(f, int) or len(f) != 2:
-                raise ValueError(f"{m.__name__} expects 2 inputs, got {f} at layer {i}")
-            c_left, c_right = ch[f[0]], ch[f[1]]
-            # Auto infer dim if not provided (None or missing)
-            if len(args) == 0:
-                args.insert(0, c_left)
-            elif args[0] is None:
-                args[0] = c_left
-            c2 = c_left
-        
-        # IR侧轻量金字塔（简化版），输出多尺度tuple (P3/P4/P5)。放在此处可避免进入 NNexpend 区域。
-        elif m is SpatialPriorModuleLite:
-            # 期望单路输入（IR图像或其特征），返回3个尺度特征。
-            if isinstance(f, (list, tuple)) and len(f) != 1:
-                raise ValueError(f"{m.__name__} expects 1 input, got {f} at layer {i}")
-            # 参数签名（强制显式传参，不做兼容性自动填充）：
-            # SpatialPriorModuleLite(inplanes: int, embed_dims: (C8,C16,C32), in_chans: int, use_bn: bool=False/True)
-            if len(args) < 3:
-                raise ValueError(
-                    f"{m.__name__} 需要显式参数: [inplanes, (C8,C16,C32), in_chans][, use_bn]，"
-                    f"但第 {i} 层收到: {args}"
-                )
-            # 校验 embed_dims
-            embed = args[1]
-            if not isinstance(embed, (list, tuple)) or len(embed) != 3:
-                raise ValueError(
-                    f"{m.__name__} 的第2个参数应为3元组 (C8,C16,C32)，但收到: {embed}"
-                )
-            # 记录第一个输出通道到通道追踪器（后续可用 Index 选择具体尺度）
-            try:
-                c2 = int(embed[0])
-            except Exception as e:
-                raise ValueError(f"{m.__name__} 的 embed_dims[0] 需为整数，但收到: {embed[0]}") from e
-        elif m in frozenset({CrossTransformerFusion, MultiHeadCrossAttention}):
-            c2, args = _parse_two_input_equal_attn(m, f, args, ch, i)
-        elif m is ConvFFN_GLU:
-            # Standalone conv-ffn with GLU gate. By default assumes input is 2C and output is C.
-            # If args not provided, set [in_channels=c_in, out_channels=c_in // 2]
-            c_in = ch[f]
-            if len(args) < 2:
-                # [in_channels, out_channels]
-                args = [c_in, max(c_in // 2, 1), *args]
-            else:
-                # fill None placeholders
-                if args[0] is None:
-                    args[0] = c_in
-                if args[1] is None:
-                    args[1] = max(c_in // 2, 1)
-            c2 = args[1]
         elif m in (DETECT_CLASS + SEGMENT_CLASS + POSE_CLASS + OBB_CLASS):
             # 为检测/分割/姿态/旋转头注入各层输入通道列表
             args.append([ch[x] for x in f])
             # 分割头的通用通道缩放（与上游保持一致）
             if m in SEGMENT_CLASS:
                 # 某些分割实现会使用第三个位置作为通道相关超参（如原生 Segment 的 npr/c4），保持与上游一致的缩放
-                # 注意：LSCD 分割实际使用 args[3] 作为 hidc，后续专门处理
                 if len(args) > 2 and isinstance(args[2], (int, float)):
                     args[2] = make_divisible(min(args[2], max_channels) * width, 8)
             # 统一 legacy 标记以维持兼容（若目标类未定义该属性不会产生副作用）
@@ -2231,20 +2004,6 @@ def parse_model(d, ch, verbose=True, dataset_config=None):
                     m.legacy = legacy
                     break
 
-            # ===== LSCD 系列专项缩放：按上游做法对 hidc 等通道型参数进行宽度缩放 =====
-            if LSCD_AVAILABLE:
-                if m is Detect_LSCD and len(args) > 1 and isinstance(args[1], (int, float)):
-                    # Detect_LSCD(nc, hidc, ch)
-                    args[1] = make_divisible(min(args[1], max_channels) * width, 8)
-                elif m is Segment_LSCD and len(args) > 3 and isinstance(args[3], (int, float)):
-                    # Segment_LSCD(nc, nm, npr, hidc, ch) -> 缩放 hidc
-                    args[3] = make_divisible(min(args[3], max_channels) * width, 8)
-                elif m is Pose_LSCD and len(args) > 2 and isinstance(args[2], (int, float)):
-                    # Pose_LSCD(nc, kpt_shape, hidc, ch) -> 缩放 hidc
-                    args[2] = make_divisible(min(args[2], max_channels) * width, 8)
-                elif m is OBB_LSCD and len(args) > 2 and isinstance(args[2], (int, float)):
-                    # OBB_LSCD(nc, ne, hidc, ch) -> 缩放 hidc
-                    args[2] = make_divisible(min(args[2], max_channels) * width, 8)
         elif m is RTDETRDecoder:  # special case, channels arg must be passed in index 1
             args.insert(1, [ch[x] for x in f])
         elif m is CBLinear:
@@ -2253,23 +2012,6 @@ def parse_model(d, ch, verbose=True, dataset_config=None):
             args = [c1, c2, *args[1:]]
         elif m is CBFuse:
             c2 = ch[f[-1]]
-        elif m is DConv:
-            # RD: channel-preserving injection block, supports (c1, alpha=0.8, atoms=512)
-            # Flexible YAML args: [] or [atoms] or [alpha] or [atoms, alpha]
-            c1 = ch[f]
-            c2 = ch[f]
-            alpha = 0.8
-            atoms = 512
-            if len(args) == 1:
-                if isinstance(args[0], (int, torch.Tensor)):
-                    atoms = int(args[0])
-                else:
-                    alpha = float(args[0])
-            elif len(args) >= 2:
-                # assume [atoms, alpha]
-                atoms = int(args[0])
-                alpha = float(args[1])
-            args = [c1, alpha, atoms, *args[2:]]
         elif m is TorchVision:
             c2 = args[0]
             c1 = ch[f]
@@ -2285,148 +2027,14 @@ def parse_model(d, ch, verbose=True, dataset_config=None):
             c1, c2 = ch[f], args[0] * block_type.expansion
             args = [c1, args[0], block_type, *args[2:]]
         
-        # === SOEP Neck模块处理 ===
-        elif m is CSPOmniKernel:
-            # CSPOmniKernel: 只需要dim参数，从输入通道自动推断
-            c2 = ch[f]
-            args = [c2]
-        elif m is SPDConv:
-            # SPDConv: 空间到深度卷积，需要 inc 和 ouc，可选 dimension（默认1）
-            c1, c2 = ch[f], args[0]
-            c2 = make_divisible(min(c2, max_channels) * width, 8)
-            dim_arg = args[1] if len(args) > 1 else 1
-            args = [c1, c2, dim_arg]
-        elif m is MFM:
-            # MFM: 多尺度特征调制，需要inc列表和dim参数
-            # args应该是[dim, reduction]，inc从f自动推断
-            if len(args) < 1:
-                raise ValueError(f"MFM requires at least 1 arg (dim), got {args}")
-            inc = [ch[x] for x in f]
-            dim = args[0]
-            c2 = dim
-            # args保持为[inc, dim, reduction(可选)]
-            if len(args) >= 2:
-                args = [inc, dim, args[1]]
-            else:
-                args = [inc, dim]
-        # === C3k2 变体（需要参数重排） ===
-        elif C3K2_EXTRACTION_AVAILABLE and m in (C3k2_DAttention,):
-            # 兼容 YAML 写法 [c2, c3k?(bool), e?(float)]
-            # 目标签名: (c1, c2, n=1, fmapsize=None, c3k=False, e=0.5, g=1, shortcut=True)
-            # 注意：parse_model 已用外层 n 重复模块，内部 n 保持默认1
-            c1, c2 = ch[f], args[0]
-            if c2 != nc:
-                c2 = make_divisible(min(c2, max_channels) * width, 8)
-            c3k_flag = False
-            e_val = 0.5
-            if len(args) > 1 and isinstance(args[1], bool):
-                c3k_flag = args[1]
-            if len(args) > 2 and isinstance(args[2], (int, float)):
-                e_val = float(args[2])
-            # 不显式传入 fmapsize（保持为 None，内部自适应），不传 g/shortcut（使用默认）
-            args = [c1, c2, 1, None, c3k_flag, e_val]
         elif m is SNI:
-            # SNI: 软最近邻插值，上采样层，通道数保持不变，仅接收 up_f 参数
-            # 保持 YAML 中的 args（如 [2]）不变，不注入通道参数
             c1, c2 = ch[f], ch[f]
-            # args 原样传递
         elif m is GSConvE:
-            # GSConvE: 卷积式增强模块，需要显式的输出通道数
-            c1, c2 = ch[f], args[0] if len(args) > 0 else ch[f]
+            c1, c2 = ch[f], args[0] if args else ch[f]
             if c2 != nc:
                 c2 = make_divisible(min(c2, max_channels) * width, 8)
             args = [c1, c2, *args[1:]]
 
-        # NNexpend [disabled by default]
-        # Extra modules 扩展模块处理（已默认禁用，保留占位注释）
-
-        # elif m is PST:
-        #     c1,c_up,c2 = ch[f[0]],ch[f[1]],args[0]
-        #     c2 = make_divisible(min(c2, max_channels) * width, 8)
-        #     args = [c1,c_up,c2, *args[1:]]
-        #     args.insert(3,n)
-        #     n = 1
-        # elif m is C3k2_KW:  # C3k2核仓库模块 - 来自extra_modules
-        #     c1, c2 = ch[f], args[0]
-        #     if c2 != nc:
-        #         c2 = make_divisible(min(c2, max_channels) * width, 8)
-        #     # 初始化核仓库管理器
-        #     if 'warehouse_manager' not in locals():
-        #         from ultralytics.nn.extra_modules.kernel_warehouse import get_warehouse_manager
-        #         warehouse_manager = get_warehouse_manager()
-        #     args = [c1, c2, *args[1:]]
-        #     # 在特定位置插入层名称和仓库管理器
-        #     args.insert(2, f'layer{i}')
-        #     args.insert(2, warehouse_manager)
-        #     if n > 1:
-        #         args.insert(4, n)  # 由于插入了参数，调整位置
-        #         n = 1
-        # elif m in {C3k2_DySnakeConv, C3k2_OREPA, C3k2_REPVGGOREPA,
-        #           C3k2_RFAConv, C3k2_RFCBAMConv, C3k2_RFCAConv,
-        #           C3k2_VSS, C3k2_wConv}:  # 其他C3k2变体 - 来自extra_modules
-        #     c1, c2 = ch[f], args[0]
-        #     if c2 != nc:
-        #         c2 = make_divisible(min(c2, max_channels) * width, 8)
-        #     # 标准C3k2参数处理
-        #     args = [c1, c2, *args[1:]]
-        #     # 特定变体的特殊处理
-        #     if m is C3k2_DySnakeConv:
-        #         # DySnakeConv可能需要特殊的通道处理
-        #         # 但对于C3k2变体，保持标准处理
-        #         pass
-        #     # 为C3k2块添加n参数
-        #     if n > 1:
-        #         args.insert(2, n)
-        #         n = 1
-        #     # M/L/X尺寸的特殊处理
-        #     if scale in "mlx":
-        #         # C3k2_wConv有特殊的参数处理
-        #         if m is C3k2_wConv:
-        #             if len(args) > 0 and isinstance(args[-1], bool):
-        #                 args[-1] = True
-        #             elif len(args) > 1:
-        #                 args[-2] = True
-        #         else:
-        #             # 其他C3k2变体使用标准的args[3]处理
-        #             if len(args) > 3:
-        #                 args[3] = True
-
-        # 标准卷积模块处理 - 来自extra_modules（默认禁用）
-        # elif m in {RFAConv, RFCBAMConv, RFCAConv,  # RFA系列卷积
-        #           VSSBlock_YOLO, XSSBlock,  # Mamba VSS/XSS块
-        #           CSP_FreqSpatial,  # 频空间CSP模块
-        #           FeaturePyramidSharedConv,  # 特征金字塔共享卷积
-        #           DSConv_YOLO13, wConv2d}:  # YOLO13系列卷积
-        #     c1, c2 = ch[f], args[0]
-        #     if c2 != nc:
-        #         c2 = make_divisible(min(c2, max_channels) * width, 8)
-        #     args = [c1, c2, *args[1:]]
-        #     # 只有XSSBlock和CSP_FreqSpatial支持重复参数
-        #     if m in {XSSBlock, CSP_FreqSpatial} and n > 1:
-        #         args.insert(2, n)
-        #         n = 1
-
-        # 注意力机制模块处理 - 来自extra_modules（默认禁用）
-        # elif m in {EMA, BiLevelRoutingAttention, BiLevelRoutingAttention_nchw,
-        #           TripletAttention, CoordAtt,
-        #         #   CBAM,
-        #           BAMBlock, LSKBlock, ScConv, LAWDS, EMSConv, EMSConvP,
-        #           SEAttention, CPCA, Partial_conv3, FocalModulation, EfficientAttention, MPCA, deformable_LKA,
-        #           EffectiveSEModule, LSKA, SegNext_Attention, DAttention, MLCA, TransNeXt_AggregatedAttention,
-        #           FocusedLinearAttention, LocalWindowAttention, ChannelAttention_HSFPN, ELA_HSFPN, CA_HSFPN, CAA_HSFPN,
-        #           DySample, CARAFE, CAA, ELA, CAFM, AFGCAttention, EUCB, EfficientChannelAttention,
-        #           ContrastDrivenFeatureAggregation, FSA, AttentiveLayer, EUCB_SC}:  # 所有注意力机制模块
-        #     c2 = ch[f]
-        #     args = [c2, *args]
-
-        # NNexpend（默认禁用）
-
-        # elif m in {HAFB}:
-        #     if args[0] == 'head_channel':
-        #         args[0] = d[args[0]]
-        #     c1 = [ch[x] for x in f]
-        #     c2 = make_divisible(min(args[0], max_channels) * width, 8)
-        #     args = [c1, c2, *args[1:]]
         else:
             c2 = ch[f] if isinstance(f, int) else args[0]
 

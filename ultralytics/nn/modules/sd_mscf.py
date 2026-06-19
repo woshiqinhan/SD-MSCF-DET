@@ -1,4 +1,10 @@
-"""Core modules used by SD-MSCF-DET."""
+"""Core modules used by SD-MSCF-DET.
+
+The multi-kernel feature block is adapted from the poly-kernel design used by
+PKINet. The statistical attention and dynamic normalization components build
+on ToST and Dynamic Tanh, respectively. See the project documentation for
+citations; the public SD-MSCF-DET module names describe their use here.
+"""
 
 import torch
 import torch.nn as nn

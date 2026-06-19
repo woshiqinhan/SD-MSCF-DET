@@ -1,10 +1,8 @@
-# Replace this path with the local root of the prepared dataset.
 path: /path/to/M3FD_split
 train: images/train
 val: images/val
 test: images/test
 
-# Paired images must share the same relative path and filename.
 modalities:
   rgb: images
   ir: images_ir
@@ -17,4 +15,3 @@ names:
   3: Motorcycle
   4: Lamp
   5: Truck
-

@@ -10,20 +10,17 @@ __pycache__/
 .venv/
 venv/
 
-# Datasets, checkpoints, and experiment outputs
-datasets/
-data/
-runs/
-results/
-weights/
-wandb/
+/datasets/
+/data/
+/runs/
+/results/
+/weights/
+/wandb/
 *.pt
 *.pth
 *.onnx
 *.engine
 *.ev4a
 
-# Local Ultralytics state
 .yolo-config/
 ultralytics_settings.json
-
